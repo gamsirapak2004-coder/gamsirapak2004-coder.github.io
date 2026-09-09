@@ -1,2 +1,3 @@
 # gamsirapak2004-coder.github.io
-Hello
+Hi! i'm Sirapak Khonthothongkam
+My nickname is GAM
