@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Portfolio - Gam</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Kanit', sans-serif;
+            /* พื้นหลังเป็นแบบไล่สีฟ้า-ม่วง-น้ำเงินลึก */
+            background: linear-gradient(180deg, #5bcefa 0%, #366bc9 40%, #5a2e98 80%, #1a1040 100%);
+        }
+        canvas {
+            display: block;
+        }
+        
+        /* สไตล์สำหรับกล่องข้อความ Pop-up (Glassmorphism) */
+        #popup-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            color: white;
+            text-align: center;
+            z-index: 10;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        #popup-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #bbf0ff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #popup-content {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            margin-bottom: 25px;
+        }
+
+        #close-btn {
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            padding: 10px 25px;
+            border-radius: 50px;
+            color: white;
+            font-family: 'Kanit', sans-serif;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(0,242,254,0.4);
+        }
+
+        #close-btn:hover {
+            transform: scale(1.05);
+        }
+
+        #hint {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            pointer-events: none;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ข้อความแนะนำ -->
+    <div id="hint">หมุนดูรอบๆ และ 👆 คลิกที่ป้ายหน้าตู้ปลาเพื่ออ่านข้อมูล</div>
+
+    <!-- หน้าต่าง Pop-up -->
+    <div id="popup-modal">
+        <div id="popup-title">หัวข้อ</div>
+        <div id="popup-content">รายละเอียด</div>
+        <button id="close-btn" onclick="closePopup()">ปิด</button>
+    </div>
+
+    <!-- โหลด Three.js ผ่าน CDN แบบ ES Module -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ----------------- ข้อมูล Portfolio -----------------
+        const portfolioData = {
+            profile: {
+                title: "👤 ข้อมูลส่วนตัว",
+                content: "<b>ชื่อจริง :</b> นางสาว ศิราภัค คณโฑทองคำ<br><b>ชื่อเล่น :</b> แก้ม<br><b>อายุ :</b> 22 ปี<br><b>วันเกิด :</b> 10 กรกฎาคม 2004"
+            },
+            education: {
+                title: "🎓 การศึกษา",
+                content: "มหาวิทยาลัยเทคโนโลยีราชมงคลรัตนโกสินทร์<br>คณะสถาปัตยกรรมศาสตร์และการออกแบบ<br><b>สาขาวิชา :</b> ออกแบบสื่อดิจิทัล<br><b>เอก :</b> เกมและแอนิเมชัน"
+            },
+            hobbies: {
+                title: "🎨 งานอดิเรก",
+                content: "วาดรูป 🖌️<br>ดูหนัง 🎬<br>ฟังเพลง 🎧<br>อ่านหนังสือ 📚"
+            }
+        };
+
+        // ----------------- Scene Setup -----------------
+        const scene = new THREE.Scene();
+        // ตั้งค่าหมอกเพื่อให้ดูลึกเหมือนใต้ทะเล
+        scene.fog = new THREE.FogExp2(0x1a1040, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: true ให้เห็นพื้นหลัง CSS
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 + 0.2; // ไม่ให้มุดลงใต้ดินมากไป
+
+        // ----------------- Lighting -----------------
+        // แสงสว่างจากดวงอาทิตย์ด้านบน ทะเลลึกด้านล่าง
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1a1040, 1.2);
+        hemiLight.position.set(0, 20, 0);
+        scene.add(hemiLight);
+
+        // แสงส่องลงมา (Sunlight)
+        const dirLight = new THREE.DirectionalLight(0xaaddff, 2);
+        dirLight.position.set(5, 15, 5);
+        scene.add(dirLight);
+
+        // ----------------- สร้างตู้ปลาอควาเรียม -----------------
+        const tankGroup = new THREE.Group();
+        scene.add(tankGroup);
+
+        // กระจกตู้ปลา
+        const tankGeo = new THREE.BoxGeometry(10, 6, 6);
+        const tankMat = new THREE.MeshPhysicalMaterial({
+            color: 0x88ccff,
+            metalness: 0.1,
+            roughness: 0.1,
+            transmission: 0.9, // ทำให้ดูใสเหมือนกระจก
+            ior: 1.5,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide
+        });
+        const tank = new THREE.Mesh(tankGeo, tankMat);
+        tankGroup.add(tank);
+
+        // ฐานและขอบตู้ปลา
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x333344, metalness: 0.8, roughness: 0.2 });
+        const baseGeo = new THREE.BoxGeometry(10.2, 0.5, 6.2);
+        const base = new THREE.Mesh(baseGeo, frameMat);
+        base.position.y = -3.25;
+        tankGroup.add(base);
+        const topFrame = new THREE.Mesh(baseGeo, frameMat);
+        topFrame.position.y = 3.25;
+        tankGroup.add(topFrame);
+
+        // ----------------- สร้างฉลามอ้วน (Fat Shark) -----------------
+        const sharkGroup = new THREE.Group();
+        
+        // ตัวฉลาม (อ้วนๆ)
+        const bodyGeo = new THREE.SphereGeometry(1.5, 32, 16);
+        bodyGeo.scale(1, 0.8, 1.6); // ยืดให้ยาวและแบนเล็กน้อย
+        const sharkMat = new THREE.MeshStandardMaterial({ color: 0x5a7ca6, roughness: 0.5 });
+        const bellyMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5 });
+        
+        const body = new THREE.Mesh(bodyGeo, sharkMat);
+        sharkGroup.add(body);
+
+        // ท้องฉลาม
+        const bellyGeo = new THREE.SphereGeometry(1.48, 32, 16, 0, Math.PI*2, Math.PI/2, Math.PI/2);
+        bellyGeo.scale(1, 0.8, 1.6);
+        const belly = new THREE.Mesh(bellyGeo, bellyMat);
+        belly.position.y = -0.05;
+        sharkGroup.add(belly);
+
+        // ครีบกระโดง (Top Fin)
+        const finGeo = new THREE.ConeGeometry(0.4, 1.2, 3);
+        const topFin = new THREE.Mesh(finGeo, sharkMat);
+        topFin.position.set(0, 1.4, -0.5);
+        topFin.rotation.x = -0.3;
+        sharkGroup.add(topFin);
+
+        // ครีบข้าง (Side Fins)
+        const sideFin1 = new THREE.Mesh(finGeo, sharkMat);
+        sideFin1.position.set(1.4, -0.2, 0);
+        sideFin1.rotation.set(0, 0, -1.2);
+        sharkGroup.add(sideFin1);
+
+        const sideFin2 = new THREE.Mesh(finGeo, sharkMat);
+        sideFin2.position.set(-1.4, -0.2, 0);
+        sideFin2.rotation.set(0, 0, 1.2);
+        sharkGroup.add(sideFin2);
+
+        // หาง (Tail)
+        const tailGroup = new THREE.Group();
+        tailGroup.position.set(0, 0, -2.2);
+        const tailFinGeo = new THREE.ConeGeometry(0.3, 1.5, 3);
+        const tailTop = new THREE.Mesh(tailFinGeo, sharkMat);
+        tailTop.position.set(0, 0.5, -0.5);
+        tailTop.rotation.x = -0.8;
+        tailGroup.add(tailTop);
+        const tailBot = new THREE.Mesh(tailFinGeo, sharkMat);
+        tailBot.position.set(0, -0.5, -0.5);
+        tailBot.rotation.x = -2.2;
+        tailBot.scale.set(1, 0.8, 1);
+        tailGroup.add(tailBot);
+        sharkGroup.add(tailGroup);
+
+        // ตา
+        const eyeGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeR.position.set(0.9, 0.2, 1.2);
+        sharkGroup.add(eyeR);
+        const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+        eyeL.position.set(-0.9, 0.2, 1.2);
+        sharkGroup.add(eyeL);
+
+        sharkGroup.scale.set(0.8, 0.8, 0.8);
+        scene.add(sharkGroup);
+
+        // ----------------- สร้างปลาตัวเล็ก -----------------
+        const smallFishes = [];
+        const smallFishGeo = new THREE.ConeGeometry(0.15, 0.5, 4);
+        smallFishGeo.rotateX(Math.PI / 2); // ให้หันหัวไปทางแกน Z
+        const colors = [0xffaa00, 0xff5555, 0x55ffaa];
+        
+        for (let i = 0; i < 15; i++) {
+            const fishMat = new THREE.MeshStandardMaterial({ color: colors[i % 3] });
+            const fish = new THREE.Mesh(smallFishGeo, fishMat);
+            // สุ่มตำแหน่งในตู้ปลา
+            fish.position.set(
+                (Math.random() - 0.5) * 8,
+                (Math.random() - 0.5) * 4,
+                (Math.random() - 0.5) * 4
+            );
+            fish.userData = {
+                speed: 0.01 + Math.random() * 0.02,
+                angle: Math.random() * Math.PI * 2,
+                radius: 1 + Math.random() * 3,
+                yOffset: fish.position.y
+            };
+            scene.add(fish);
+            smallFishes.push(fish);
+        }
+
+        // ----------------- สร้างฟองอากาศ -----------------
+        const bubbles = [];
+        const bubbleGeo = new THREE.SphereGeometry(0.1, 16, 16);
+        const bubbleMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff, transmission: 1, opacity: 1, transparent: true, roughness: 0, ior: 1.1
+        });
+
+        for(let i=0; i<30; i++) {
+            const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+            bubble.position.set(
+                (Math.random() - 0.5) * 8,
+                -3 + Math.random() * 6,
+                (Math.random() - 0.5) * 4
+            );
+            bubble.scale.setScalar(0.3 + Math.random() * 0.7);
+            bubble.userData = { speed: 0.02 + Math.random() * 0.03 };
+            scene.add(bubble);
+            bubbles.push(bubble);
+        }
+
+        // ----------------- สร้างป้ายข้อความ (Canvas Texture) -----------------
+        const signMeshes = [];
+        
+        function createSign(text, dataKey, x, y, z) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // พื้นหลังป้าย
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, 512, 128, 20);
+            ctx.fill();
+            
+            // ขอบป้าย
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#5a2e98';
+            ctx.stroke();
+
+            // ข้อความ
+            ctx.font = 'bold 45px Kanit, sans-serif';
+            ctx.fillStyle = '#1a1040';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const planeGeo = new THREE.PlaneGeometry(3, 0.75);
+            const planeMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const sign = new THREE.Mesh(planeGeo, planeMat);
+            
+            sign.position.set(x, y, z);
+            sign.userData = { isClickable: true, key: dataKey };
+            scene.add(sign);
+            signMeshes.push(sign);
+        }
+
+        // ติดป้ายไว้ที่กระจกด้านหน้าตู้ปลา (Z = 3.01)
+        createSign("คลิกดู ข้อมูลส่วนตัว", "profile", -2.5, 1.5, 3.01);
+        createSign("คลิกดู การศึกษา", "education", 2.5, 1.5, 3.01);
+        createSign("คลิกดู งานอดิเรก", "hobbies", 0, -1.5, 3.01);
+
+        // ----------------- ระบบ Interaction (คลิกป้าย) -----------------
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (event) => {
+            // แปลงพิกัดเมาส์
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(signMeshes);
+
+            if (intersects.length > 0) {
+                const key = intersects[0].object.userData.key;
+                const data = portfolioData[key];
+                
+                // แสดง Pop-up
+                document.getElementById('popup-title').innerHTML = data.title;
+                document.getElementById('popup-content').innerHTML = data.content;
+                document.getElementById('popup-modal').style.display = 'block';
+                
+                // ขยายป้ายกระเด้งนิดนึงเวลาคลิก
+                intersects[0].object.scale.set(1.1, 1.1, 1.1);
+                setTimeout(() => {
+                    intersects[0].object.scale.set(1, 1, 1);
+                }, 150);
+            }
+        });
+
+        // ----------------- ฟังก์ชันปิด Pop-up (Global) -----------------
+        window.closePopup = function() {
+            document.getElementById('popup-modal').style.display = 'none';
+        }
+
+        // ----------------- Animation Loop -----------------
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            // แอนิเมชันน้องฉลาม
+            sharkGroup.position.y = Math.sin(time * 1.5) * 0.5; // ลอยขึ้นลง
+            tailGroup.rotation.y = Math.sin(time * 5) * 0.3; // หางส่าย
+            sharkGroup.rotation.y = Math.sin(time * 0.5) * 0.2; // หันซ้ายขวา
+
+            // แอนิเมชันปลาเล็ก (ว่ายเป็นวงกลมรอบๆ ตู้)
+            smallFishes.forEach(fish => {
+                fish.userData.angle += fish.userData.speed;
+                fish.position.x = Math.cos(fish.userData.angle) * fish.userData.radius;
+                fish.position.z = Math.sin(fish.userData.angle) * fish.userData.radius;
+                fish.position.y = fish.userData.yOffset + Math.sin(time * 2 + fish.userData.angle) * 0.5;
+                // หันหน้าไปตามทิศทางการว่าย
+                fish.rotation.y = -fish.userData.angle; 
+            });
+
+            // แอนิเมชันฟองอากาศ
+            bubbles.forEach(bubble => {
+                bubble.position.y += bubble.userData.speed;
+                bubble.position.x += Math.sin(time * 2 + bubble.position.y) * 0.01; // ลอยส่ายๆ
+                // ถ้าลอยพ้นผิวน้ำ (ขอบบนตู้ปลา) ให้กลับไปเริ่มใหม่
+                if (bubble.position.y > 3) {
+                    bubble.position.y = -3;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // การตอบสนองเมื่อย่อ/ขยายหน้าจอ
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
